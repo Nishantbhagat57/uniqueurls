@@ -2,7 +2,7 @@ import sys
 import sqlite3
 import urllib.parse
 import tempfile
-from fuzzywuzzy import fuzz, process
+from fuzzywuzzy import fuzz
 import argparse
 
 # Create ArgumentParser instance for handling command line arguments
@@ -30,14 +30,11 @@ c.execute('''
 # Read URLs from file and insert into database
 with open(args.url_file, 'r') as file:
     for line in file:
-        # Parse URL
-        url = urllib.parse.urlparse(line.strip())
-        # Get origin from netloc and scheme, SQL escape via ? placeholder
+        line = line.strip()
+        url = urllib.parse.urlparse(line)
         origin = url.scheme + "://" + url.netloc
-        # Ensure that path is not empty before inserting into database
-        if url.path:
-            c.execute('INSERT INTO urls VALUES (?, ?)', (origin, url.path))
-
+        c.execute('INSERT INTO urls VALUES (?, ?)', (origin, line))
+        
 conn.commit()
 
 # Open debug file (if specified) for writing
@@ -55,16 +52,16 @@ for o in origins:
     paths = c.fetchall()
 
     unique_paths = []
-    for path in paths:
+    for p in paths:
         # If path is not args.ratio% similar to any path in unique paths, we add to unique paths
-        if not any(fuzz.ratio(path[0], u) > args.ratio for u in unique_paths):
-            unique_paths.append(path[0])
+        if not any(fuzz.ratio(p[0], u) > args.ratio for u in unique_paths):
+            unique_paths.append(p[0])
         elif debug_file:
             # Write removed URL to debug file
-            debug_file.write(f'{origin}{path[0]}\n')
+            debug_file.write(f'{p[0]}\n')
 
     for path in unique_paths:
-        print(f'{origin}{path}')
+        print(f'{path}')
 
 # Close the connection, at this point the temporary database will be automatically deleted
 conn.close()
