@@ -2,7 +2,8 @@ import sys
 import sqlite3
 import urllib.parse
 import tempfile
-from fuzzywuzzy import fuzz
+from multiprocessing import Pool, cpu_count
+from rapidfuzz import fuzz
 import argparse
 
 # Create ArgumentParser instance for handling command line arguments
@@ -37,35 +38,36 @@ with open(args.url_file, 'r') as file:
         
 conn.commit()
 
-# Open debug file (if specified) for writing
-debug_file = None
-if args.debug:
-    debug_file = open(args.debug, 'w')
+# Function to perform fuzzy matching
+def fuzzy_matching(paths):
+    unique_paths = []
+    for p in paths:
+        if not any(fuzz.ratio(p[0], u) > args.ratio for u in unique_paths):
+            unique_paths.append(p[0])
+        elif args.debug:
+            with open(args.debug, 'a') as debug_file:
+                debug_file.write(f'{p[0]}\n')
+    return unique_paths
 
 # Select all origins
 c.execute('SELECT DISTINCT origin FROM urls')
 origins = c.fetchall()
 
+# Start a multiprocessing Pool
+pool = Pool(processes=cpu_count())
+results = []
 for o in origins:
     origin = o[0]
     c.execute('SELECT path FROM urls WHERE origin = ?', (origin,))
     paths = c.fetchall()
+    results.append(pool.apply_async(fuzzy_matching, [paths]))
 
-    unique_paths = []
-    for p in paths:
-        # If path is not args.ratio% similar to any path in unique paths, we add to unique paths
-        if not any(fuzz.ratio(p[0], u) > args.ratio for u in unique_paths):
-            unique_paths.append(p[0])
-        elif debug_file:
-            # Write removed URL to debug file
-            debug_file.write(f'{p[0]}\n')
+# Get process results from the output queue
+output = [p.get() for p in results]
 
-    for path in unique_paths:
-        print(f'{path}')
+for path in output:
+    for url in path:
+        print(url)
 
 # Close the connection, at this point the temporary database will be automatically deleted
 conn.close()
-
-# Close debug file (if opened)
-if debug_file:
-    debug_file.close()
