@@ -15,7 +15,7 @@ It helps professionals in the realm of pentesting and bug hunting streamline the
 1. Clone the GitHub repository:
 
 ```bash
-git clone https://github.com/yourusername/uniqueurls.git
+git clone https://github.com/Nishantbhagat57/uniqueurls.git
 cd uniqueurls
 ```
 
